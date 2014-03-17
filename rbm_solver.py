@@ -1232,7 +1232,7 @@ if __name__ == '__main__':
     w=int(args[12])
     sample_sd=float(args[13])
     trial = int(args[14])
-    name = "ae_rosenbrock10_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,w,sample_sd,trial)
+    name = "ae_sphere_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,w,sample_sd,trial)
     l = AEContinuousSolver()
     z=l.not_probabilistic_ia(name,
                         pop_size=pop_size,
