@@ -4,7 +4,7 @@ def create_text(command):
         text += "#$ -cwd              # Set the working directory for the job to the current directory\n"
         text += "#$ -V\n"
         text += "#$ -l h_rt=24:0:0    # Request 24 hour runtime\n"
-        text += "#$ -l h_vmem=1G      # Request 256MB RAM\n"
+        text += "#$ -l h_vmem=1.5G      # Request 256MB RAM\n"
         text += "{0}".format(command)
         return text
 
