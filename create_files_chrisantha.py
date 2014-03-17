@@ -24,7 +24,7 @@ for pop_size in [500,700,1000]:
                                                                                                 command = "python2.6 rbm_solver.py {0} {1} 20 {2} {3} {4} {5} {6} {7} {8} {9} 20 {10} {11}".format(
                                                                                                         pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_good_strings,sample_sd,trials)
                                                                                                 f_text = create_text(command)
-                                                                                                f = open("ae_sphere_{0}_{1}_20_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_20_{10}_{11}.job".format(
+                                                                                                f = open("ae_rosenbrock_{0}_{1}_20_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_20_{10}_{11}.job".format(
                                                                                                         pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_good_strings,sample_sd,trials),"w")
                                                                                                 f.write(f_text)
 
