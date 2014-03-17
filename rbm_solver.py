@@ -6,7 +6,7 @@ from deep_da import Deep_dA_cont
 import pdb
 
 DO_CACHING = False
-FITNESS_F = "sphere"
+FITNESS_F = "rosenbrock"
 # def cached_string(f):
 #     """
 #     This is a decorator to make sure
