@@ -1,3 +1,7 @@
+import os
+import sys
+import time
+
 for pop_size in [500,600,700,1000]:
         for lim_percentage in [10,20]:
                 for num_epochs in [10,25,50]:
