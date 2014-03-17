@@ -14,7 +14,7 @@ for pop_size in [500,600,700,1000]:
                                                                         for use_good_strings in [1]:
                                                                                 for sample_sd in [0.001,0.01,0.001]:
                                                                                         for trials in range(0,5):
-                                                                                                os.system('qsub ae_rosenbrock_{0}_{1}_20_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_20_{10}_{11}.job'.format(
+                                                                                                os.system('qsub ae_sphere_{0}_{1}_20_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_20_{10}_{11}.job'.format(
                                                                                                         pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,
                                                                                                         hiddens,corruption_level,use_good_strings,sample_sd,trials))
                                                                                                 time.sleep(0.1)
