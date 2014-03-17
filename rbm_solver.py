@@ -2,7 +2,7 @@ from left_ones import *
 from scipy.spatial.distance import pdist,cdist
 import pdb
 from deep_da import Deep_dA_cont
-import sklearn.cluster
+#import sklearn.cluster
 import pdb
 
 DO_CACHING = False
