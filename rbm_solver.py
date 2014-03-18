@@ -2,7 +2,7 @@ from left_ones import *
 from scipy.spatial.distance import pdist,cdist
 import pdb
 from deep_da import Deep_dA_cont
-#import sklearn.cluster
+import sklearn.cluster
 import pdb
 
 DO_CACHING = False
@@ -925,12 +925,24 @@ class AEContinuousSolver(AESolver):
         child = (parent*(1-lr))+(proposal*lr)+np.random.normal(0,noise,len(parent))
         return child
 
-    def get_k_means(self,data):
-        k_means = sklearn.cluster.KMeans(n_clusters=20)
+    def get_k_means(self,data,n_clusters=20):
+        k_means = sklearn.cluster.KMeans(n_clusters=n_clusters)
         print 'Finding k centroids using k-means'
         k_means.fit(data)
+        predictions = k_means.predict(data)
+        cluster_data = dict([(i,[]) for i in xrange(n_clusters)])
+        for example,cluster in zip(data,predictions):
+            cluster_data[cluster].append(example)
+        for cluster in cluster_data.keys():
+            cluster_data[cluster].sort(key=lambda x:self.fitness(x))
         centroids = k_means.cluster_centers_    
-        return centroids
+        return centroids,cluster_data
+
+    def pick_top_k(self,cluster_data,k):
+        top_examples = []
+        for cluster in cluster_data.keys():
+            top_examples.extend(cluster_data[cluster][:k])
+        return numpy.array(top_examples)
 
     def k_means(
         self,
@@ -1017,14 +1029,15 @@ class AEContinuousSolver(AESolver):
                 self.build_sample_dA()
             good_strings,good_strings_fitnesses=self.get_good_strings(population,population_limit,unique=unique_training,fitnesses=self.population_fitnesses)
             print '************'
-            centroids = self.get_k_means(population)
+            centroids,cluster_data = self.get_k_means(population)
             for f in good_strings_fitnesses:
                 print "good_strings_fitnesses:",f
             print "training A/E"
             if use_best_strings:
                 training_data = np.array(good_strings)
             else:
-                training_data = centroids
+                #training_data = centroids
+                training_data = self.pick_top_k(cluster_data,1)
             self.train_dA(training_data,num_epochs=num_epochs,lr=lr,output_folder=results_path)
             print "training A/E over"
             print "sampling..."
@@ -1174,85 +1187,85 @@ if __name__ == '__main__':
     #                         use_best_strings=True,
     #                         rtr = False
     #                         )
-    # for i in range(0,1):
-    #     corruption_level = 0.1
-    #     name = "sphere_{0}".format(corruption_level)
-    #     l = AEContinuousSolver()
-    #     z=l.k_means(name,
-    #                         pop_size=1000,
-    #                         genome_length=50,
-    #                         lim_percentage=20,
-    #                         lim=20,
-    #                         trials=1,
-    #                         corruption_level=corruption_level,
-    #                         num_epochs=25,
-    #                         lr = 0.01,
-    #                         online_training=True,
-    #                         pickle_data=False,
-    #                         save_data=False,
-    #                         max_evaluations=500000,
-    #                         cross_rate=1.0,
-    #                         unique_training=True,
-    #                         sample_rate=1,
-    #                         hiddens=[100],
-    #                         use_best_strings=False,
-    #                         w=50,
-    #                         sample_sd=0.01
-    #                         )
+    for i in range(0,1):
+        corruption_level = 0.1
+        name = "sphere_{0}".format(corruption_level)
+        l = AEContinuousSolver()
+        z=l.k_means(name,
+                            pop_size=1000,
+                            genome_length=50,
+                            lim_percentage=20,
+                            lim=20,
+                            trials=1,
+                            corruption_level=corruption_level,
+                            num_epochs=25,
+                            lr = 0.01,
+                            online_training=True,
+                            pickle_data=False,
+                            save_data=False,
+                            max_evaluations=500000,
+                            cross_rate=1.0,
+                            unique_training=True,
+                            sample_rate=1,
+                            hiddens=[100],
+                            use_best_strings=False,
+                            w=50,
+                            sample_sd=0.01
+                            )
 
 
-    args = sys.argv
-    pop_size=int(args[1])
-    print pop_size
-    genome_length=50
-    lim_percentage=int(args[2])
-    lim=int(args[3])
-    trials=10
-    num_epochs=int(args[4])
-    lr = float(args[5])
-    online_training=int(args[6])
-    if online_training == 0:
-        online_training = False
-    else:
-        online_training = True
-    unique_training=int(args[7])
-    if unique_training == 0:
-        unique_training = False
-    else:
-        unique_training = True
-    pickle_data=False
-    sample_rate=int(args[8])
-    hiddens=int(args[9])
-    corruption_level=float(args[10])
-    use_best_strings=int(args[11])
-    if use_best_strings == 0:
-        use_best_strings = False
-    else:
-        use_best_strings = True
-    w=int(args[12])
-    sample_sd=float(args[13])
-    trial = int(args[14])
-    name = "ae_sphere_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,w,sample_sd,trial)
-    l = AEContinuousSolver()
-    z=l.not_probabilistic_ia(name,
-                        pop_size=pop_size,
-                        genome_length=genome_length,
-                        lim_percentage=lim_percentage,
-                        lim=20,
-                        trials=1,
-                        corruption_level=corruption_level,
-                        num_epochs=num_epochs,
-                        lr = lr,
-                        online_training=online_training,
-                        pickle_data=False,
-                        save_data=False,
-                        max_evaluations=100000,
-                        cross_rate=1.0,
-                        unique_training=unique_training,
-                        sample_rate=1,
-                        hiddens=[hiddens],
-                        use_best_strings=use_best_strings,
-                        w=w,
-                        sample_sd=sample_sd
-                        )
+    # args = sys.argv
+    # pop_size=int(args[1])
+    # print pop_size
+    # genome_length=50
+    # lim_percentage=int(args[2])
+    # lim=int(args[3])
+    # trials=10
+    # num_epochs=int(args[4])
+    # lr = float(args[5])
+    # online_training=int(args[6])
+    # if online_training == 0:
+    #     online_training = False
+    # else:
+    #     online_training = True
+    # unique_training=int(args[7])
+    # if unique_training == 0:
+    #     unique_training = False
+    # else:
+    #     unique_training = True
+    # pickle_data=False
+    # sample_rate=int(args[8])
+    # hiddens=int(args[9])
+    # corruption_level=float(args[10])
+    # use_best_strings=int(args[11])
+    # if use_best_strings == 0:
+    #     use_best_strings = False
+    # else:
+    #     use_best_strings = True
+    # w=int(args[12])
+    # sample_sd=float(args[13])
+    # trial = int(args[14])
+    # name = "ae_sphere_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,w,sample_sd,trial)
+    # l = AEContinuousSolver()
+    # z=l.not_probabilistic_ia(name,
+    #                     pop_size=pop_size,
+    #                     genome_length=genome_length,
+    #                     lim_percentage=lim_percentage,
+    #                     lim=20,
+    #                     trials=1,
+    #                     corruption_level=corruption_level,
+    #                     num_epochs=num_epochs,
+    #                     lr = lr,
+    #                     online_training=online_training,
+    #                     pickle_data=False,
+    #                     save_data=False,
+    #                     max_evaluations=100000,
+    #                     cross_rate=1.0,
+    #                     unique_training=unique_training,
+    #                     sample_rate=1,
+    #                     hiddens=[hiddens],
+    #                     use_best_strings=use_best_strings,
+    #                     w=w,
+    #                     sample_sd=sample_sd
+    #                     )
 
