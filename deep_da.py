@@ -19,7 +19,7 @@ class Deep_dA(object):
         assert (self.n_layers > 0)
         if numpy_rng is None:
             # create a number generator
-            numpy_rng = numpy.random.RandomState(1234)
+            numpy_rng = numpy.random.RandomState()
         if theano_rng is None:
             theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
         self.theano_rng = theano_rng
@@ -109,7 +109,7 @@ class Deep_dA(object):
         else:
           print 'Building squared_err.'
           self.L = T.sum((self.input-self.z)**2,axis=1)
-          self.cost = T.mean(self.L) + 0.0001*self.l2 #Should we keep this?
+          self.cost = T.mean(self.L) + 0.0000*self.l2 #Should we keep this?
           self.sample = self.z
 
     def build_sampler(self,k=20):
@@ -140,7 +140,7 @@ class Deep_dA_cont(Deep_dA):
        """
        mask = self.theano_rng.binomial(size=input.shape, n=1, p=1-corruption_level,dtype=theano.config.floatX) 
        input_flip = input*mask
-       #input_flip = theano.printing.Print('Printing flipped input')(input_flip)
+       # input_flip = theano.printing.Print('Printing flipped input')(input_flip)
        return input_flip
 
 

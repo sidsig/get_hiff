@@ -7,7 +7,7 @@ import pdb
 import warnings
 warnings.filterwarnings("ignore")
 DO_CACHING = False
-FITNESS_F = "rosenbrock"
+FITNESS_F = "adj_ones"
 # def cached_string(f):
 #     """
 #     This is a decorator to make sure
@@ -113,6 +113,7 @@ class RBMSolver(CF1):
             if cache:
                 self.cache_fitness(fitness)
             return fitness
+
     elif FITNESS_F == "ackley":
         def fitness(self,string,cache=False):
             genome = np.array(string)
@@ -121,6 +122,17 @@ class RBMSolver(CF1):
             fitness = 20 - 20 * np.exp(-0.2*np.sqrt(1.0/N * np.sum(x**2 for x in genome))) \
             + np.e - np.exp(1.0/N * np.sum(np.cos(2*np.pi*x) for x in genome))
             fitness = fitness * -1
+            if cache:
+                self.cache_fitness(fitness)
+            return fitness
+
+    elif FITNESS_F == "adj_ones":
+        def fitness(self,string,cache=False):
+            # print "string:",[s for s in string]
+            # print "target:",[s for s in self.target]
+            distance = np.sum(np.abs(np.array(string)-np.array(self.target)))
+            # print "distance:",distance
+            fitness = distance * -1
             if cache:
                 self.cache_fitness(fitness)
             return fitness
@@ -549,6 +561,200 @@ class AESolver(RBMSolver):
                 print "saving over"
         fitfile.close()
         return new_population
+
+class AERestartSolver(AESolver):
+    """docstring for RBMSolver"""
+    def __init__(self,knapsack_file="knapsack_500.pkl",):
+        super(AERestartSolver, self).__init__(knapsack_file="knapsack_500.pkl")
+        self.rr_mask = np.array(np.random.binomial(1,0.5,64),"b")
+        self.RBM = RBM(n_visible=64,n_hidden=50)
+        self.knapsack = pickle.load(open(knapsack_file))
+        self.fitness_cache = {}
+
+    def hboa_iterative_algorithm(
+        self,
+        name,
+        pop_size=100,
+        genome_length=20,
+        lim_percentage=20,
+        lim=20,
+        trials=10,
+        corruption_level=0.2,
+        num_epochs=50,
+        lr = 0.1,
+        online_training=False,
+        pickle_data=False,
+        max_evaluations=200000,
+        save_data=False,
+        cross_rate=0.9,
+        unique_training=False,
+        sample_rate=5,
+        hiddens=40,
+        use_best_strings=True,
+        rtr = True,
+        target_list = ["a","b"],
+        stopping_criterion=False
+        ):
+        self.stopping_criterion = stopping_criterion
+        self.dA = dA(n_visible=genome_length,n_hidden=hiddens)
+        self.dA.build_dA(corruption_level)
+        self.build_sample_dA()
+        # targets = {
+        # "a":[0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        # "b":[0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0],
+        # "c":[0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        # "d":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+        # "e":[0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        # "f":[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        # "g":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0],
+        # "h":[0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        # "i":[0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0],
+        # "j":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0],
+        # }
+        targets = {
+            "a":np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.]),
+            "b":np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  1.]),
+            "c":np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.]),
+            "d":np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,
+                0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,
+                0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  0.]),
+            "e":np.array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  1.,  0.,  0.,
+                0.,  0.,  0.,  1.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  1.,  0.,
+                0.,  0.,  0.,  0.,  1.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,
+                0.,  1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  1.,  0.,
+                0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,  1.,
+                0.,  0.,  0.,  0.,  0.,  1.,  0.,  1.,  0.,  0.,  0.,  0.,  0.,
+                0.,  0.,  1.])
+                }
+        solved_in = []
+        for target in target_list:
+            print "target:",target
+            self.target = targets[target]
+            name = "{0}_{1}".format(name,target)
+            self.mask = np.random.binomial(1,0.5,genome_length)
+            results_path = "results/autoencoder/{0}/".format(name)
+            ensure_dir(results_path)
+            ensure_dir("results/{0}/".format(name))
+            np.savetxt("results/{0}/mask.dat".format(name),self.mask)
+            trials = max_evaluations/pop_size
+            population_limit = lim
+            cross_rate = cross_rate
+            if lim_percentage > 0:
+                population_limit = int(pop_size*(lim_percentage/100.0))
+                print "population_limit:",population_limit
+                print "{0}*({1}/100.0) = {2}".format(pop_size,lim_percentage,int(pop_size*(lim_percentage/100.0)))
+            fitfile = open("{0}fitnesses.dat".format(results_path),"w")
+            new_population = np.random.binomial(1,0.5,(pop_size,genome_length))
+            self.population_fitnesses = self.fitness_many(new_population)
+            fitfile.write("{0},{1},{2},{3}\n".format(np.mean(self.population_fitnesses),np.min(self.population_fitnesses),np.max(self.population_fitnesses),np.std(self.population_fitnesses)))
+            print "{0},{1},{2}\n".format(np.mean(self.population_fitnesses),np.min(self.population_fitnesses),np.max(self.population_fitnesses))
+            if save_data:
+                print "saving stuff..."
+                self.save_population(name,new_population,0)
+                self.save_sampled_rw_population(name,sampled_population,0)
+                self.save_training_data(name,training_data,0)
+                random_pop = [self.generate_random_string(genome_length) for z in range(pop_size)]
+                print random_pop[0]
+                sampled_r_pop = self.sample_dA(random_pop)
+                self.save_sampled_random_population(name,[r for r in sampled_r_pop],0)
+                self.save_random_population(name,random_pop,0)
+                self.save_pop_fitnesses(name,self.population_fitnesses,"fitness_pop",0)
+                self.save_pop_fitnesses(name,good_strings_fitnesses,"fitness_training_data",0)
+                print "saving over"
+            best = []
+            for iteration in range(0,trials):
+                print "iteration:",iteration
+                population = new_population
+                self.population = new_population
+                rw = self.tournament_selection_replacement(population)
+                if online_training == False:
+                    print "building model..."
+                    self.dA = dA(n_visible=genome_length,n_hidden=100)
+                    self.dA.build_dA(corruption_level)
+                    self.build_sample_dA()
+                good_strings,good_strings_fitnesses=self.get_good_strings(population,population_limit,unique=unique_training,fitnesses=self.population_fitnesses)
+                for f in good_strings_fitnesses:
+                    print "good_strings_fitnesses:",f
+                print "training A/E"
+                if use_best_strings:
+                    training_data = np.array(good_strings)
+                else:
+                    training_data = rw[0:population_limit]
+                self.train_dA(training_data,num_epochs=num_epochs,lr=lr,output_folder=results_path)
+                print "training A/E over"
+                print "sampling..."
+                sampled_population = np.array(self.sample_dA(rw),"b")
+                print "len(sampled_population):",len(sampled_population)
+                self.sample_fitnesses = self.fitness_many(sampled_population)
+                if rtr:
+                    new_population = self.RTR(population,sampled_population,population_fitnesses=self.population_fitnesses,sample_fitnesses=self.sample_fitnesses,w=pop_size/10)
+                else:
+                    new_population = sampled_population
+                print "sampling over"
+                print "getting_statistics..."
+                print "statistics over"
+                fitfile.write("{0},{1},{2},{3}\n".format(np.mean(self.population_fitnesses),np.min(self.population_fitnesses),np.max(self.population_fitnesses),np.std(self.population_fitnesses)))
+                fitfile.flush()
+                print "{0},{1},{2}\n".format(np.mean(self.population_fitnesses),np.min(self.population_fitnesses),np.max(self.population_fitnesses))
+                print "best from previous:",self.fitness(new_population[np.argmax(self.population_fitnesses)])
+                if save_data:
+                    print "saving stuff..."
+                    self.save_population(name,new_population,iteration+1)
+                    self.save_sampled_rw_population(name,sampled_population,iteration+1)
+                    self.save_training_data(name,training_data,iteration+1)
+                    random_pop = [self.generate_random_string(genome_length) for z in range(pop_size)]
+                    print random_pop[0]
+                    sampled_r_pop = self.sample_dA(random_pop)
+                    self.save_sampled_random_population(name,[r for r in sampled_r_pop],iteration+1)
+                    self.save_random_population(name,random_pop,iteration+1)
+                    self.save_pop_fitnesses(name,self.population_fitnesses,"fitness_pop",iteration+1)
+                    self.save_pop_fitnesses(name,good_strings_fitnesses,"fitness_training_data",iteration+1)
+                    print "saving over"
+                # best.append(new_population[np.argmax(self.population_fitnesses)])
+                # if len(best) > 10:
+                #     best.pop(0)
+                #     same = True
+                #     for b in best:
+                #         # print "b:",b
+                #         # print "best[0]:",best[0]
+                #         if np.array_equal(b,best[0]) == False:
+                #             same = False
+                #             break
+                #     if same:
+                #         break
+                # print "target:",target
+                # print "b:",new_population[np.argmax(self.population_fitnesses)]
+                # print "t:",self.target
+                if good_strings_fitnesses[0] == 0:
+                    solved_in.append(iteration)
+                    if self.stopping_criterion:
+                        self.train_dA(training_data,num_epochs=num_epochs,lr=lr,output_folder=results_path)
+                    break
+            fitfile.close()
+            print "solved_in:",solved_in
+        return solved_in
 
 class AEContinuousSolver(AESolver):
     """docstring for RBMSolver"""
@@ -1318,208 +1524,153 @@ class AEContinuousSolver(AESolver):
 
 
 if __name__ == '__main__':
-    # args = sys.argv
-    # pop_size=int(args[1])
-    # print pop_size
-    # genome_length=64
-    # lim_percentage=int(args[2])
-    # lim=int(args[3])
-    # trials=10
-    # num_epochs=int(args[4])
-    # lr = float(args[5])
-    # online_training=int(args[6])
-    # if online_training == 0:
-    #     online_training = False
-    # else:
-    #     online_training = True
-    # unique_training=int(args[7])
-    # if unique_training == 0:
-    #     unique_training = False
-    # else:
-    #     unique_training = True
-    # pickle_data=False
-    # sample_rate=int(args[8])
-    # hiddens=int(args[9])
-    # corruption_level=int(args[10])
-    # for i in range(0,5):
-    #     name = "hiff_64_online_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,i)
-    #     l = RBMSolver()
-    #     z=l.hboa_iterative_algorithm(name,
-    #                         pop_size=pop_size,
-    #                         genome_length=genome_length,
-    #                         lim_percentage=lim_percentage,
-    #                         lim=20,
-    #                         trials=1,
-    #                         corruption_level=corruption_level,
-    #                         num_epochs=num_epochs,
-    #                         lr = lr,
-    #                         online_training=True,
-    #                         pickle_data=False,
-    #                         save_data=False,
-    #                         max_evaluations=500000,
-    #                         cross_rate=1.0,
-    #                         unique_training=unique_training,
-    #                         sample_rate=sample_rate,
-    #                         hiddens=hiddens)
-    # args = sys.argv
-    # pop_size=int(args[1])
-    # print pop_size
-    # genome_length=500
-    # lim_percentage=int(args[2])
-    # lim=int(args[3])
-    # trials=10
-    # num_epochs=int(args[4])
-    # lr = float(args[5])
-    # online_training=int(args[6])
-    # if online_training == 0:
-    #     online_training = False
-    # else:
-    #     online_training = True
-    # unique_training=int(args[7])
-    # if unique_training == 0:
-    #     unique_training = False
-    # else:
-    #     unique_training = True
-    # pickle_data=False
-    # sample_rate=int(args[8])
-    # hiddens=int(args[9])
-    # corruption_level=float(args[10])
-    # use_best_strings=int(args[11])
-    # if use_best_strings == 0:
-    #     use_best_strings = False
-    # else:
-    #     use_best_strings = True
-    # trial = int(args[12])
-    # name = "ae_knapsack_500_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,trial)
-    # l = AESolver()
-    # z=l.hboa_iterative_algorithm(name,
-    #                     pop_size=pop_size,
-    #                     genome_length=genome_length,
-    #                     lim_percentage=lim_percentage,
+    # results = {}
+    # for first in ['a','b','c']:
+    #     for second in ['a','b','c']:
+    #         solveds = []
+    #         for i in range(0,5):
+    #             corruption_level = 0.1
+    #             name = "sphere_{0}".format(corruption_level)
+    #             l = AERestartSolver()
+    #             solved_in=l.hboa_iterative_algorithm(name,
+    #                                 pop_size=200,
+    #                                 genome_length=20,
+    #                                 lim_percentage=20,
+    #                                 lim=20,
+    #                                 trials=1,
+    #                                 corruption_level=corruption_level,
+    #                                 num_epochs=10,
+    #                                 lr = 0.01,
+    #                                 online_training=True,
+    #                                 pickle_data=False,
+    #                                 save_data=False,
+    #                                 max_evaluations=100000,
+    #                                 cross_rate=1.0,
+    #                                 unique_training=True,
+    #                                 sample_rate=1,
+    #                                 hiddens=15,
+    #                                 use_best_strings=True,
+    #                                 target_list=[first,second]
+    #                                 )
+    #             solveds.append(solved_in)
+    #         results[first+second] = solveds
+    # pickle.dump(results,open("equilivance.pkl","w"))
+    # base_t = ["a","b","c","d","e","f","g","h","i","j"]
+    # all = []
+    # import copy
+    # results = {}
+    # for test in range(0,200):
+    #     scrambled = copy.deepcopy(base_t)
+    #     random.shuffle(scrambled)
+    #     name = ""
+    #     for s in scrambled: name+=s
+    #     while name in all:
+    #         random.shuffle(scrambled)
+    #         name = ""
+    #         for s in scrambled: name+=s
+    #     all.append(scrambled)
+    #     solveds = []
+    #     for i in range(0,5):
+    #         print 'name:',name
+    #         print 'scrambled:',scrambled
+    #         corruption_level = 0.1
+    #         _name = "sphere_{0}".format(corruption_level)
+    #         l = AERestartSolver()
+    #         solved_in=l.hboa_iterative_algorithm(name,
+    #                             pop_size=200,
+    #                             genome_length=20,
+    #                             lim_percentage=20,
+    #                             lim=20,
+    #                             trials=1,
+    #                             corruption_level=corruption_level,
+    #                             num_epochs=10,
+    #                             lr = 0.01,
+    #                             online_training=True,
+    #                             pickle_data=False,
+    #                             save_data=False,
+    #                             max_evaluations=100000,
+    #                             cross_rate=1.0,
+    #                             unique_training=True,
+    #                             sample_rate=1,
+    #                             hiddens=15,
+    #                             use_best_strings=True,
+    #                             target_list=scrambled
+    #                             )
+    #         solveds.append(solved_in)
+    #     results[name] = solveds
+    #     pickle.dump(results,open("equilivance_10s.pkl","w"))
+    # corruption_level = 0.1
+    # _name = "sphere_{0}".format(corruption_level)
+    # l = AERestartSolver()
+    # solved_in=l.hboa_iterative_algorithm(_name,
+    #                     pop_size=1000,
+    #                     genome_length=81,
+    #                     lim_percentage=20,
     #                     lim=20,
     #                     trials=1,
     #                     corruption_level=corruption_level,
-    #                     num_epochs=num_epochs,
-    #                     lr = lr,
-    #                     online_training=online_training,
+    #                     num_epochs=50,
+    #                     lr = 0.1,
+    #                     online_training=True,
     #                     pickle_data=False,
     #                     save_data=False,
-    #                     max_evaluations=200000,
-    #                     cross_rate=0.9,
-    #                     unique_training=unique_training,
-    #                     sample_rate=sample_rate,
-    #                     hiddens=hiddens,
-    #                     use_best_strings=use_best_strings)
-
-    # for i in range(0,1):
-    #     corruption_level = 0.05
-    #     name = "ae_knapsack_500_p600_10_50_0.1_True_True_0_200_True_{0}".format(corruption_level)
-    #     l = AESolver()
-    #     z=l.hboa_iterative_algorithm(name,
-    #                         pop_size=5000,
-    #                         genome_length=128,
-    #                         lim_percentage=10,
-    #                         lim=20,
-    #                         trials=1,
-    #                         corruption_level=corruption_level,
-    #                         num_epochs=25,
-    #                         lr = 0.1,
-    #                         online_training=True,
-    #                         pickle_data=False,
-    #                         save_data=False,
-    #                         max_evaluations=500000,
-    #                         cross_rate=1.0,
-    #                         unique_training=True,
-    #                         sample_rate=1,
-    #                         hiddens=128,
-    #                         use_best_strings=True,
-    #                         rtr = False
-    #                         )
-    for i in range(0,1):
-        corruption_level = 0.1
-        name = "sphere_{0}".format(corruption_level)
-        l = AEContinuousSolver()
-        z=l.k_means_new_pop(name,
-                            pop_size=1000,
-                            genome_length=10,
-                            lim_percentage=20,
-                            lim=20,
-                            trials=1,
-                            corruption_level=corruption_level,
-                            num_epochs=100,
-                            lr = 0.1,
-                            online_training=True,
-                            pickle_data=False,
-                            save_data=False,
-                            max_evaluations=500000,
-                            cross_rate=1.0,
-                            unique_training=True,
-                            sample_rate=1,
-                            hiddens=[30],
-                            use_best_strings=False,
-                            w=20,
-                            sample_sd=0.0001,
-                            no_clusters=10,
-                            pick_top_k=10
-                            )
-
-
-    # args = sys.argv
-    # pop_size=int(args[1])
-    # print pop_size
-    # genome_length=50
-    # lim_percentage=int(args[2])
-    # lim=int(args[3])
-    # trials=10
-    # num_epochs=int(args[4])
-    # lr = float(args[5])
-    # online_training=int(args[6])
-    # if online_training == 0:
-    #     online_training = False
-    # else:
-    #     online_training = True
-    # unique_training=int(args[7])
-    # if unique_training == 0:
-    #     unique_training = False
-    # else:
-    #     unique_training = True
-    # pickle_data=False
-    # sample_rate=int(args[8])
-    # hiddens=int(args[9])
-    # corruption_level=float(args[10])
-    # use_best_strings=int(args[11])
-    # if use_best_strings == 0:
-    #     use_best_strings = False
-    # else:
-    #     use_best_strings = True
-    # w=int(args[12])
-    # sample_sd=float(args[13])
-    # no_clusters = int(args[14])
-    # k_top = int(args[15])
-    # trial = int(args[16])
-    # name = "ae_rosenbrock_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}_{13}_{14}".format(pop_size,lim_percentage,num_epochs,lr,online_training,unique_training,sample_rate,hiddens,corruption_level,use_best_strings,w,sample_sd,no_clusters,k_top,trial)
-    # l = AEContinuousSolver()
-    # z=l.k_means(name,
-    #                     pop_size=pop_size,
-    #                     genome_length=genome_length,
-    #                     lim_percentage=lim_percentage,
-    #                     lim=20,
-    #                     trials=1,
-    #                     corruption_level=corruption_level,
-    #                     num_epochs=num_epochs,
-    #                     lr = lr,
-    #                     online_training=online_training,
-    #                     pickle_data=False,
-    #                     save_data=False,
-    #                     max_evaluations=100000,
+    #                     max_evaluations=500000,
     #                     cross_rate=1.0,
-    #                     unique_training=unique_training,
+    #                     unique_training=True,
     #                     sample_rate=1,
-    #                     hiddens=[hiddens],
-    #                     use_best_strings=use_best_strings,
-    #                     w=w,
-    #                     sample_sd=sample_sd,
-    #                     no_clusters=no_clusters,
-    #                     pick_top_k=k_top
+    #                     hiddens=70,
+    #                     use_best_strings=True,
+    #                     # target_list=["a","b","c","d","e"]
+    #                     target_list=["a","b","c","d","e"],
+    #                     # target_list=["e"]
+    #                     stopping_criterion=False
     #                     )
-
+    args = sys.argv
+    pop_size=int(args[1])
+    print pop_size
+    genome_length=50
+    lim_percentage=int(args[2])
+    lim=20
+    trial = int(args[3])
+    corruption_level=float(args[4])
+    num_epochs=int(args[5])
+    lr = float(args[6])
+    online_training=True
+    pickle_data=False
+    save_data=Falses
+    max_evaluations = 500000
+    cross_rate = 1.
+    unique_training = int(args[7])
+    if unique_training == 0.:
+        unique_training = False
+    else:
+        unique_training = True  
+    sample_rate= 1.
+    hiddens=int(args[8])
+    use_best_strings=True
+    target_list=["a","b","c","d","e"]
+    stopping_criterion = False
+    name = "ae_restart_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}".format(
+           pop_size,lim_percentage,trial,corruption_level,num_epochs,lr,unique_trainign,hiddens)
+    l = AERestartSolver()
+    solved_in=l.hboa_iterative_algorithm(name,
+                        pop_size=pop_size,
+                        genome_length=genome_length,
+                        lim_percentage=lim_percentage,
+                        lim=lim,
+                        trials=trial,
+                        corruption_level=corruption_level,
+                        num_epochs=num_epochs,
+                        lr = lr,
+                        online_training=online_training,
+                        pickle_data=pickle_data,
+                        save_data=save_data,
+                        max_evaluations=max_evaluations,
+                        cross_rate=cross_rate,
+                        unique_training=unique_training,
+                        sample_rate=sample_rate,
+                        hiddens=hiddens,
+                        use_best_strings=use_best_strings,
+                        target_list=target_list,
+                        stopping_criterion=stopping_criterion
+                        )
